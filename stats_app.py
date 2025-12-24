@@ -3,6 +3,9 @@ from io import BytesIO
 from pathlib import Path
 from PIL import Image
 
+# Set matplotlib backend before importing pyplot (important for Streamlit Cloud)
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend for server environments
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -426,13 +429,17 @@ t = lambda key, fallback="": translate(lang_code, key, fallback)
 # ---------------------------------------------------------
 # Background video ala Matrix app (using local BG.mp4)
 # ---------------------------------------------------------
+# Background video - handle gracefully if file doesn't exist
 video_path = Path("BG.mp4")
-if video_path.exists():
-    video_bytes = video_path.read_bytes()
-    video_base64 = base64.b64encode(video_bytes).decode()
-    video_src = f"data:video/mp4;base64,{video_base64}"
-else:
-    video_src = ""
+video_src = ""
+try:
+    if video_path.exists():
+        video_bytes = video_path.read_bytes()
+        video_base64 = base64.b64encode(video_bytes).decode()
+        video_src = f"data:video/mp4;base64,{video_base64}"
+except Exception as e:
+    # If video file can't be loaded, continue without background video
+    pass
 
 video_html = f"""
 <style>
@@ -982,22 +989,24 @@ def load_data(file):
         return None
 
 def compute_descriptive_stats(data, var_name):
-    data_clean = data.dropna()
+    # paksa data jadi numerik, non-numeric jadi NaN
+    data_numeric = pd.to_numeric(data, errors="coerce")
+    data_clean = data_numeric.dropna()
     if len(data_clean) == 0:
         return None, None
 
     stats_dict = {
         "Variable": var_name,
         "N": len(data_clean),
-        "Mean": np.mean(data_clean),
-        "Median": np.median(data_clean),
+        "Mean": float(np.mean(data_clean)),
+        "Median": float(np.median(data_clean)),
         "Mode": stats.mode(data_clean, keepdims=True)[0][0]
         if len(data_clean) > 0
         else np.nan,
-        "Minimum": np.min(data_clean),
-        "Maximum": np.max(data_clean),
-        "Std Dev": np.std(data_clean, ddof=1),
-        "Variance": np.var(data_clean, ddof=1),
+        "Minimum": float(np.min(data_clean)),
+        "Maximum": float(np.max(data_clean)),
+        "Std Dev": float(np.std(data_clean, ddof=1)),
+        "Variance": float(np.var(data_clean, ddof=1)),
     }
 
     freq_table = pd.Series(data_clean).value_counts().sort_index()
@@ -1011,6 +1020,7 @@ def compute_descriptive_stats(data, var_name):
         }
     )
     return stats_dict, freq_df
+
 
 def interpret_correlation(r, p_value):
     direction = "positive" if r > 0 else "negative"
@@ -1366,9 +1376,13 @@ st.sidebar.markdown(
 )
 
 def load_member_photo(first_name: str):
-    img_path = Path(f"{first_name}.jpg")
-    if img_path.exists():
-        return Image.open(img_path)
+    """Load member photo safely, return None if file doesn't exist"""
+    try:
+        img_path = Path(f"{first_name}.jpg")
+        if img_path.exists():
+            return Image.open(img_path)
+    except Exception as e:
+        st.sidebar.warning(f"Could not load photo for {first_name}: {str(e)}")
     return None
 
 # 1. Aldy Candra Winata
