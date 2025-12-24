@@ -2,8 +2,7 @@ streamlit
 pandas
 numpy
 matplotlib
-Pillow
 scipy
 reportlab
-
-
+openpyxl
+Pillow
